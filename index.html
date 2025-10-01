@@ -1215,8 +1215,14 @@
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
                             <!-- Open Positions Overview - Compact -->
                             <div class="rounded-lg shadow-sm p-4" style="background-color: var(--bg-primary); border: 1px solid var(--border-color);">
-                                <h3 class="text-lg font-bold mb-2" style="color: var(--text-primary);">Open Positions Overview</h3>
-                                <p class="text-xs mb-4" style="color: var(--text-secondary);">Analysis of your current <span id="open-positions-count">0</span> open position<span id="open-positions-plural">s</span></p>
+                                <div class="flex items-center justify-between mb-2">
+                                    <h3 class="text-lg font-bold" style="color: var(--text-primary);">Open Positions Overview</h3>
+                                    <span class="px-2 py-1 text-xs rounded-full" style="background-color: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border-color);">
+                                        <i data-feather="clock" class="inline-block h-3 w-3 mr-1"></i>
+                                        Top 6 by Days Open
+                                    </span>
+                                </div>
+                                <p class="text-xs mb-4" style="color: var(--text-secondary);">Analysis of your current <span id="open-positions-count">0</span> open position<span id="open-positions-plural">s</span> • Showing longest-running positions</p>
                                 
                                 <!-- Open Positions Cards - Compact -->
                                 <div class="grid grid-cols-2 gap-3">
@@ -7639,8 +7645,19 @@
         };
         const renderOpenPositionsOverview = () => {
             try {
-                const openTrades = appState.trades.filter(trade => !trade.exit_date || !trade.exit_price);
-                const openTradesCount = openTrades.length;
+                const allOpenTrades = appState.trades.filter(trade => !trade.exit_date || !trade.exit_price);
+                const openTradesCount = allOpenTrades.length;
+                
+                // Sort by days open (highest first) and take top 6
+                const openTrades = allOpenTrades
+                    .map(trade => {
+                        const entryDate = new Date(trade.entry_date);
+                        const currentDate = new Date();
+                        const daysOpen = Math.ceil((currentDate - entryDate) / (1000 * 60 * 60 * 24));
+                        return { ...trade, daysOpen };
+                    })
+                    .sort((a, b) => b.daysOpen - a.daysOpen)
+                    .slice(0, 6);
                 
                 // Update count and pluralization
                 const countEl = document.getElementById('open-positions-count');
@@ -7651,8 +7668,8 @@
                 if (pluralEl) pluralEl.textContent = openTradesCount === 1 ? '' : 's';
                 if (capitalPluralEl) capitalPluralEl.textContent = openTradesCount === 1 ? '' : 's';
                 
-                // Calculate Capital Deployed
-                const capitalDeployed = openTrades.reduce((total, trade) => {
+                // Calculate Capital Deployed (use all open trades, not just the filtered 6)
+                const capitalDeployed = allOpenTrades.reduce((total, trade) => {
                     return total + ((trade.entry_price || 0) * (trade.quantity || 0));
                 }, 0);
                 
@@ -7662,8 +7679,8 @@
                 if (capitalAmountEl) capitalAmountEl.textContent = formatCurrency(capitalDeployed);
                 if (capitalDescEl) capitalDescEl.textContent = `${openTradesCount} open trade${openTradesCount === 1 ? '' : 's'}`;
                 
-                // Calculate Total Open Risk (same as Account Summary)
-                const totalRiskAmount = openTrades.reduce((total, trade) => {
+                // Calculate Total Open Risk (use all open trades, not just the filtered 6)
+                const totalRiskAmount = allOpenTrades.reduce((total, trade) => {
                     const tradeValue = trade.entry_price * trade.quantity;
                     return total + tradeValue;
                 }, 0);
@@ -7714,9 +7731,6 @@
                         positionsListEl.innerHTML = '<p class="text-sm text-center py-8" style="color: var(--text-muted);">No open positions</p>';
                     } else {
                         positionsListEl.innerHTML = openTrades.map(trade => {
-                            const entryDate = new Date(trade.entry_date);
-                            const currentDate = new Date();
-                            const daysOpen = Math.ceil((currentDate - entryDate) / (1000 * 60 * 60 * 24));
                             const totalValue = (trade.entry_price || 0) * (trade.quantity || 0);
                             
                             const typeColor = trade.direction === 'Long' ? '#10b981' : '#ef4444';
@@ -7728,7 +7742,7 @@
                                         <span class="px-3 py-1 rounded-full text-xs font-medium text-white" style="background-color: ${typeBg};">${trade.direction || 'Long'}</span>
                                         <div>
                                             <p class="font-medium" style="color: var(--text-primary);">${trade.asset || 'N/A'}</p>
-                                            <p class="text-sm" style="color: var(--text-secondary);">${daysOpen}d open</p>
+                                            <p class="text-sm" style="color: var(--text-secondary);">${trade.daysOpen}d open</p>
                                         </div>
                                     </div>
                                     <div class="text-right">
@@ -7738,6 +7752,7 @@
                                 </div>
                             `;
                         }).join('');
+                        
                     }
                 }
                 
