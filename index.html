@@ -1219,7 +1219,7 @@
                                     <h3 class="text-lg font-bold" style="color: var(--text-primary);">Open Positions Overview</h3>
                                     <span class="px-2 py-1 text-xs rounded-full" style="background-color: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border-color);">
                                         <i data-feather="clock" class="inline-block h-3 w-3 mr-1"></i>
-                                        Top 6 by Days Open
+                                        Top 5 by Days Open
                                     </span>
                                 </div>
                                 <p class="text-xs mb-4" style="color: var(--text-secondary);">Analysis of your current <span id="open-positions-count">0</span> open position<span id="open-positions-plural">s</span> • Showing longest-running positions</p>
@@ -1282,12 +1282,12 @@
                             </div>
                             
                             <!-- Top Trades - Compact -->
-                            <div class="rounded-lg shadow-sm p-4" style="background-color: var(--bg-primary); border: 1px solid var(--border-color);">
+                            <div class="rounded-lg shadow-sm p-4 flex flex-col" style="background-color: var(--bg-primary); border: 1px solid var(--border-color);">
                                 <div class="flex justify-between items-center mb-3">
                                    <h3 class="text-lg font-bold" style="color: var(--text-primary);">Top Trades</h3>
                                    <a href="#" data-page="trade-history" class="nav-item text-xs font-medium text-blue-600 hover:underline">View All</a>
                                 </div>
-                                <div id="top-trades-widget">
+                                <div id="top-trades-widget" class="flex-1 flex flex-col justify-start space-y-1">
                                     <!-- Top trades will be rendered here -->
                                 </div>
                             </div>
@@ -4352,8 +4352,7 @@
                 }
                 
                 // Render dependent components
-            renderTopTrades();
-            renderOpenPositionsOverview();
+            renderOpenPositionsOverview(); // This will call renderTopTrades with dynamic count
             renderAllCharts();
                 wireCsvButtons();
                 
@@ -7648,7 +7647,7 @@
                 const allOpenTrades = appState.trades.filter(trade => !trade.exit_date || !trade.exit_price);
                 const openTradesCount = allOpenTrades.length;
                 
-                // Sort by days open (highest first) and take top 6
+                // Sort by days open (highest first) and take top 5
                 const openTrades = allOpenTrades
                     .map(trade => {
                         const entryDate = new Date(trade.entry_date);
@@ -7657,7 +7656,23 @@
                         return { ...trade, daysOpen };
                     })
                     .sort((a, b) => b.daysOpen - a.daysOpen)
-                    .slice(0, 6);
+                    .slice(0, 5);
+                
+                // Calculate optimal top trades count to fit within Open Positions height
+                let topTradesCount;
+                if (openTrades.length === 0) {
+                    topTradesCount = 5; // Special case: show up to 5 when no open positions
+                } else if (openTrades.length === 1) {
+                    topTradesCount = 5; // Show 5 trades to fit compact space
+                } else if (openTrades.length === 2) {
+                    topTradesCount = 6; // Show 6 trades to fit compact space
+                } else if (openTrades.length === 3) {
+                    topTradesCount = 7; // Show 7 trades to fit medium space
+                } else if (openTrades.length === 4) {
+                    topTradesCount = 8; // Show 8 trades to fit medium space
+                } else {
+                    topTradesCount = 9; // Show 9 trades to fit full space
+                }
                 
                 // Update count and pluralization
                 const countEl = document.getElementById('open-positions-count');
@@ -7756,12 +7771,32 @@
                     }
                 }
                 
+                // Update top trades with matching count
+                renderTopTrades(topTradesCount);
+                
+                // Let Open Positions determine its natural height, then align Top Trades to match
+                const openPositionsContainer = document.querySelector('.grid.grid-cols-1.lg\\:grid-cols-2.gap-6.mb-8 > div:first-child');
+                const topTradesContainer = document.querySelector('.grid.grid-cols-1.lg\\:grid-cols-2.gap-6.mb-8 > div:last-child');
+                
+                if (openPositionsContainer && topTradesContainer) {
+                    // Remove any forced heights from Open Positions - let it be natural
+                    openPositionsContainer.style.minHeight = 'auto';
+                    openPositionsContainer.style.height = 'auto';
+                    
+                    // Wait for Open Positions to render, then align Top Trades to match
+                    setTimeout(() => {
+                        const openPosHeight = openPositionsContainer.offsetHeight;
+                        topTradesContainer.style.height = `${openPosHeight}px`;
+                        topTradesContainer.style.minHeight = `${openPosHeight}px`;
+                    }, 10);
+                }
+                
             } catch (e) {
                 console.error('renderOpenPositionsOverview error', e);
             }
         };
 
-        const renderTopTrades = () => {
+        const renderTopTrades = (count = 5) => {
             try {
                 const trades = appState.trades || [];
                 const closedTrades = trades.filter(t => t.exit_price && t.exit_date);
@@ -7770,12 +7805,12 @@
                 const sortedTrades = closedTrades
                     .map(trade => ({ ...trade, pnl: calculateNetPnl(trade) }))
                     .sort((a, b) => b.pnl - a.pnl)
-                    .slice(0, 5); // Top 5 trades
+                    .slice(0, count); // Dynamic count (max 10)
                 
                 const container = document.getElementById('top-trades-widget');
                 if (container) {
                     if (sortedTrades.length === 0) {
-                        container.innerHTML = '<p class="text-center text-gray-500">No completed trades yet.</p>';
+                        container.innerHTML = '<div class="flex-1 flex items-center justify-center"><p class="text-center text-sm" style="color: var(--text-secondary);">No completed trades yet.</p></div>';
                         return;
                     }
                     
@@ -7786,7 +7821,7 @@
                         const pnlSign = isProfit ? '+' : '';
                         
                         return `
-                            <div class="p-3 rounded-lg border" style="background-color: var(--bg-primary); border-color: var(--border-color);">
+                            <div class="p-3 rounded-lg border" style="background-color: var(--bg-secondary); border-color: var(--border-color);">
                                 <div class="flex justify-between items-center">
                                     <div class="flex items-center">
                                         <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${isProfit ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
@@ -13396,7 +13431,7 @@
                     const sortedTrades = closedTrades
                         .map(trade => ({ ...trade, pnl: calculateNetPnl(trade) }))
                         .sort((a, b) => b.pnl - a.pnl)
-                        .slice(0, 5); // Top 5 trades
+                        .slice(0, 5); // Keep default 5 for filtered view
                     
                     const container = document.getElementById('top-trades-widget');
                     if (container) {
